@@ -113,18 +113,13 @@
             <p class="text-slate-400 animate-pulse">Loading Portfolio...</p>
         </div>
 
-        <!-- File Select Fallback -->
         <div id="error-msg" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-950 z-20 text-center px-4">
-            <i data-lucide="file-warning" class="w-12 h-12 text-yellow-500 mb-4"></i>
-            <h2 class="text-xl font-bold text-white mb-2">Browser Security Check</h2>
-            <p class="text-slate-400 max-w-md mb-6">Due to browser security, local files cannot be loaded automatically.</p>
-            
-            <label class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg cursor-pointer transition-colors flex items-center gap-2">
-                <i data-lucide="upload" class="w-5 h-5"></i>
-                Select portfolio.pdf manually
-                <input type="file" id="file-input" accept=".pdf" class="hidden" />
-            </label>
-            <p class="text-slate-500 text-xs mt-4">No file is uploaded. It is just loaded into your browser view.</p>
+            <i data-lucide="alert-triangle" class="w-12 h-12 text-red-500 mb-4"></i>
+            <h2 class="text-xl font-bold text-white mb-2" id="error-title">PDF Not Found</h2>
+            <p class="text-slate-400 max-w-md" id="error-text">Could not load <code>portfolio.pdf</code>.</p>
+            <p class="text-slate-500 text-sm mt-4" id="error-subtext">
+                Please ensure your PDF file is named exactly <b>portfolio.pdf</b> and is placed in the same directory.
+            </p>
         </div>
     </main>
 
@@ -191,7 +186,7 @@
 
     <script>
         // Constants
-        const DEFAULT_PDF = 'portfolio.pdf'; 
+        const PDF_URL = 'portfolio.pdf'; 
 
         // State
         let pdfDoc = null,
@@ -234,8 +229,6 @@
                 renderTask.promise.then(() => {
                     pageRendering = false;
                     document.getElementById('loader').classList.add('hidden');
-                    document.getElementById('error-msg').classList.add('hidden');
-                    
                     if (pageNumPending !== null) {
                         renderPage(pageNumPending);
                         pageNumPending = null;
@@ -318,36 +311,33 @@
             if (e.target === modal) closeModal();
         });
 
-        // Manual File Input Handler (Fallback)
-        document.getElementById('file-input').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file && file.type === "application/pdf") {
-                const fileReader = new FileReader();
-                fileReader.onload = function() {
-                    const typedarray = new Uint8Array(this.result);
-                    window.pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
-                        pdfDoc = pdf;
-                        document.getElementById('page-count').textContent = pdfDoc.numPages;
-                        pageNum = 1;
-                        renderPage(pageNum);
-                    });
-                };
-                fileReader.readAsArrayBuffer(file);
-            }
-        });
-
-        // Initial Load Attempt
+        // Load PDF
         const loadPdf = async () => {
             try {
-                // Try automatic load first
-                const loadingTask = window.pdfjsLib.getDocument(DEFAULT_PDF);
+                // Use getDocument directly (best for most environments)
+                // Note: Direct file:// access in Chrome/Edge is typically blocked by CORS
+                const loadingTask = window.pdfjsLib.getDocument(PDF_URL);
+                
                 pdfDoc = await loadingTask.promise;
                 document.getElementById('page-count').textContent = pdfDoc.numPages;
+
                 renderPage(pageNum);
             } catch (error) {
-                console.warn('Auto-load failed (likely CORS), showing manual select:', error);
+                console.warn('PDF load failed:', error);
                 document.getElementById('loader').classList.add('hidden');
-                document.getElementById('error-msg').classList.remove('hidden');
+                
+                const errorMsg = document.getElementById('error-msg');
+                errorMsg.classList.remove('hidden');
+
+                // Helpful message for file:// protocol issues
+                if (window.location.protocol === 'file:') {
+                    document.getElementById('error-title').textContent = "Browser Security Restriction";
+                    document.getElementById('error-text').innerHTML = "Modern browsers (like Chrome) block scripts from reading local files directly for security.";
+                    document.getElementById('error-subtext').innerHTML = `
+                        <b>Solution:</b> Try opening this file in <b>Firefox</b>, 
+                        or verify 'portfolio.pdf' is in the folder.
+                    `;
+                }
             }
         };
 
