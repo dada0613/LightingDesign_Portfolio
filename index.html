@@ -113,13 +113,22 @@
             <p class="text-slate-400 animate-pulse">Loading Portfolio...</p>
         </div>
 
+        <!-- Error / Fallback State -->
         <div id="error-msg" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-950 z-20 text-center px-4">
             <i data-lucide="alert-triangle" class="w-12 h-12 text-red-500 mb-4"></i>
-            <h2 class="text-xl font-bold text-white mb-2" id="error-title">PDF Not Found</h2>
-            <p class="text-slate-400 max-w-md" id="error-text">Could not load <code>portfolio.pdf</code>.</p>
-            <p class="text-slate-500 text-sm mt-4" id="error-subtext">
-                Please ensure your PDF file is named exactly <b>portfolio.pdf</b> and is placed in the same directory.
+            <h2 class="text-xl font-bold text-white mb-2" id="error-title">Unable to Load PDF</h2>
+            <p class="text-slate-400 max-w-md mb-6" id="error-text">Could not automatically load <code>portfolio.pdf</code>.</p>
+            
+            <p class="text-slate-500 text-sm mb-4">
+                If you are viewing this locally, please use the button below.<br>
+                If this is on a website, please check the file name.
             </p>
+
+            <label class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg cursor-pointer transition-colors flex items-center gap-2">
+                <i data-lucide="upload" class="w-5 h-5"></i>
+                Select PDF Manually
+                <input type="file" id="file-input" accept=".pdf" class="hidden" />
+            </label>
         </div>
     </main>
 
@@ -139,7 +148,7 @@
             </div>
             
             <div class="space-y-4">
-                <!-- Email Display (Static) -->
+                <!-- Email Display -->
                 <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/50">
                     <div class="p-2 bg-yellow-500/10 rounded-full text-yellow-500">
                         <i data-lucide="mail" class="w-5 h-5"></i>
@@ -150,7 +159,7 @@
                     </div>
                 </div>
 
-                <!-- Phone Display (Static) -->
+                <!-- Phone Display -->
                 <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/50">
                     <div class="p-2 bg-blue-500/10 rounded-full text-blue-500">
                         <i data-lucide="phone" class="w-5 h-5"></i>
@@ -161,7 +170,7 @@
                     </div>
                 </div>
 
-                <!-- LinkedIn Display (Static) -->
+                <!-- LinkedIn Display -->
                 <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/50">
                     <div class="p-2 bg-blue-600/10 rounded-full text-blue-600">
                         <i data-lucide="linkedin" class="w-5 h-5"></i>
@@ -229,6 +238,8 @@
                 renderTask.promise.then(() => {
                     pageRendering = false;
                     document.getElementById('loader').classList.add('hidden');
+                    document.getElementById('error-msg').classList.add('hidden');
+                    
                     if (pageNumPending !== null) {
                         renderPage(pageNumPending);
                         pageNumPending = null;
@@ -311,33 +322,38 @@
             if (e.target === modal) closeModal();
         });
 
-        // Load PDF
+        // Manual File Input Handler (Fallback)
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type === "application/pdf") {
+                const fileReader = new FileReader();
+                fileReader.onload = function() {
+                    const typedarray = new Uint8Array(this.result);
+                    window.pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                        pdfDoc = pdf;
+                        document.getElementById('page-count').textContent = pdfDoc.numPages;
+                        pageNum = 1;
+                        renderPage(pageNum);
+                        document.getElementById('error-msg').classList.add('hidden'); // Hide fallback on success
+                    });
+                };
+                fileReader.readAsArrayBuffer(file);
+            }
+        });
+
+        // Main Load Function
         const loadPdf = async () => {
             try {
-                // Use getDocument directly (best for most environments)
-                // Note: Direct file:// access in Chrome/Edge is typically blocked by CORS
+                // Attempt automatic load (Will succeed on GitHub Pages / Web Server)
                 const loadingTask = window.pdfjsLib.getDocument(PDF_URL);
-                
                 pdfDoc = await loadingTask.promise;
                 document.getElementById('page-count').textContent = pdfDoc.numPages;
-
                 renderPage(pageNum);
             } catch (error) {
-                console.warn('PDF load failed:', error);
+                console.warn('Auto-load failed, likely local environment:', error);
                 document.getElementById('loader').classList.add('hidden');
-                
-                const errorMsg = document.getElementById('error-msg');
-                errorMsg.classList.remove('hidden');
-
-                // Helpful message for file:// protocol issues
-                if (window.location.protocol === 'file:') {
-                    document.getElementById('error-title').textContent = "Browser Security Restriction";
-                    document.getElementById('error-text').innerHTML = "Modern browsers (like Chrome) block scripts from reading local files directly for security.";
-                    document.getElementById('error-subtext').innerHTML = `
-                        <b>Solution:</b> Try opening this file in <b>Firefox</b>, 
-                        or verify 'portfolio.pdf' is in the folder.
-                    `;
-                }
+                // Show the fallback UI if auto-load fails
+                document.getElementById('error-msg').classList.remove('hidden');
             }
         };
 
